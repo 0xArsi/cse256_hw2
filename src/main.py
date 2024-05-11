@@ -6,6 +6,8 @@ import os
 from tokenizer import SimpleTokenizer
 from dataset import SpeechesClassificationDataset, LanguageModelingDataset
 
+from transformer import *
+
 
 seed = 42
 
@@ -99,6 +101,11 @@ def compute_perplexity(decoderLMmodel, data_loader, eval_iters=100):
     decoderLMmodel.train()
     return perplexity
 
+def train_encoder_classifier():
+    '''
+    PART 1.3)
+    '''
+    pass
 def main():
 
     print("Loading data and creating tokenizer ...")
@@ -115,7 +122,7 @@ def main():
         lmtrainText = f.read()
     train_LM_dataset = LanguageModelingDataset(tokenizer, lmtrainText,  block_size)
     train_LM_loader = DataLoader(train_LM_dataset, batch_size=batch_size, shuffle=True)
-
+    # te = CustomTransformerEncoder(embed_dim=n_embd, layer_inputdim=n_input)
      # for the classification  task, you will train for a fixed number of epochs like this:
     for epoch in range(epochs_CLS):
         for xb, yb in train_CLS_loader:
