@@ -1,4 +1,5 @@
 import torch
+import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.nn.utils.rnn import pad_sequence
 import os
@@ -8,7 +9,11 @@ from dataset import SpeechesClassificationDataset, LanguageModelingDataset
 
 from transformer import *
 
+import argparse
 
+'''
+RANDOM SEED
+'''
 seed = 42
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -106,35 +111,77 @@ def train_encoder_classifier():
     PART 1.3)
     '''
     pass
+
 def main():
 
+    data_dir = os.path.join("data", "speechesdataset")
     print("Loading data and creating tokenizer ...")
-    texts = load_texts('speechesdataset')
+    texts = load_texts(data_dir)
     tokenizer = SimpleTokenizer(' '.join(texts)) # create a tokenizer from the data
     print("Vocabulary size is", tokenizer.vocab_size)
 
-    train_CLS_dataset = SpeechesClassificationDataset(tokenizer, "speechesdataset/train_CLS.tsv")
+    train_CLS_dataset = SpeechesClassificationDataset(tokenizer, os.path.join(data_dir, "train_CLS.tsv"))
     train_CLS_loader = DataLoader(train_CLS_dataset, batch_size=batch_size,collate_fn=collate_batch,shuffle=True)
 
-  
-    inputfile = "speechesdataset/train_LM.txt"
+    vocab_size = tokenizer.vocab_size
+
+
+
+    '''
+    LOAD DATA
+    '''
+    print ("loading data...")
+    inputfile = os.path.join(data_dir, "train_LM.txt")
     with open(inputfile, 'r', encoding='utf-8') as f:
         lmtrainText = f.read()
     train_LM_dataset = LanguageModelingDataset(tokenizer, lmtrainText,  block_size)
     train_LM_loader = DataLoader(train_LM_dataset, batch_size=batch_size, shuffle=True)
-    # te = CustomTransformerEncoder(embed_dim=n_embd, layer_inputdim=n_input)
-     # for the classification  task, you will train for a fixed number of epochs like this:
+    print ("done")
+
+    '''
+    LOAD MODEL
+    '''
+    print ("loading model, loss, optimizer")
+    te = CustomTransformerEncoder(vocab_size, n_embd, n_head, n_layer, n_input, n_hidden, n_output).to(device)
+    criterion = nn.CrossEntropyLoss()  # Suitable for classification tasks
+    optimizer = optim.Adam(te.parameters(), lr=0.001)  # Learning rate might need tuning
+    print ("done")
+
+    # for the classification  task, you will train for a fixed number of epochs like this:
+    print ("starting training")
     for epoch in range(epochs_CLS):
+        te.train()  # Set the model to training mode
+        total_loss = 0
         for xb, yb in train_CLS_loader:
-            xb, yb = xb.to(device), yb.to(device)
-            # CLS training code here
+            xb, yb = xb.to(device), yb.to(device)  # Move data to the appropriate device
+            #zero out grads
+            optimizer.zero_grad()
+            #model prediction  
+            outputs = te(xb)  
+            #compute loss
+            loss = criterion(outputs, yb)
+
+            #backprop 
+            loss.backward()
+            #grad update  
+            optimizer.step()  
+
+            #update loss for this epoch
+            total_loss += loss.item()  
+
+        #print avg loss over epoch
+        epoch_avg_loss = total_loss / len(train_CLS_loader)
+
+        epoch_avg_accuracy = compute_classifier_accuracy(te, train_CLS_loader)
+
+        print(f"Epoch [{epoch+1}/{epochs_CLS}], Loss: {epoch_avg_loss:.4f}, Accuracy: {epoch_avg_accuracy:.4f}")
 
 
     # for the language modeling task, you will iterate over the training data for a fixed number of iterations like this:
-    for i, (xb, yb) in enumerate(train_LM_loader):
-        if i >= max_iters:
-            break
-        xb, yb = xb.to(device), yb.to(device)
+    # for i, (xb, yb) in enumerate(train_LM_loader):
+    #     if i >= max_iters:
+    #         break
+    #     xb, yb = xb.to(device), yb.to(device)
         # LM training code here
 
     

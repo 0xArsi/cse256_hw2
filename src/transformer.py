@@ -106,6 +106,8 @@ class CustomTransformerEncoder(nn.Module):
         x = self.embedding(x)
         for layer in self.transformer_layers:
             x = layer(x)
-        x = x.mean(dim=1)  # Assuming a simple mean pooling over sequence
+        # take the mean over all the embeddings for each token
+        # gives a length-indep. repr. for each sequence
+        x = x.mean(dim=1)
         x = self.ffnet(x)
         return x
