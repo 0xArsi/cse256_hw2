@@ -1,0 +1,94 @@
+\documentclass[10pt]{article}
+\usepackage{tocloft}
+\usepackage{blindtext}
+\usepackage{titlesec}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{amssymb}
+\usepackage{float}
+\usepackage{graphics}
+\usepackage{caption}
+\usepackage[normalem]{ulem}
+\usepackage{enumitem}
+\usepackage{natbib}
+\usepackage{sectsty}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric}
+\usetikzlibrary{trees}
+\usepackage{hyperref}
+\hypersetup{
+        colorlinks = true,
+        linkcolor = blue,
+        filecolor = magenta,            
+        urlcolor = cyan,
+        pdftitle={Overleaf Example},
+        pdfpagemode=FullScreen,
+}
+
+\title{Homework 2: Classification \& Language Modeling}
+\author{Isaac Thomas}
+\setcounter{tocdepth}{5}
+\setcounter{secnumdepth}{5}
+\setcounter{section}{0}
+
+\newcommand{\code}[1]{\texttt{#1}}
+
+\makeatletter
+\renewcommand\paragraph{\@startsection{subparagraph}{5}{\parindent}%
+        {3.25ex \@plus1ex \@minus .2ex}%
+        {0.75ex plus 0.1ex}% space after heading
+        {\normalfont\normalsize\bfseries}}
+\makeatother
+
+\makeatletter
+
+\newcommand{\dateformatter}[2]{%
+    \textbf{#1} -- \textit{#2}%
+}
+
+\newcommand{\dateevent}[2]{%
+    \addcontentsline{dates}{section}{#1 -- #2}%
+    \dateformatter{#1}{#2}%
+}
+
+\newcommand{\listofdates}{%
+    \begingroup
+    \renewcommand{\contentsname}{List of Dates}
+    \let\old@starttoc\@starttoc
+    \def\@starttoc##1{%
+        \old@starttoc{dates}%
+    }
+    \tableofcontents%
+    \endgroup
+}
+
+\makeatother
+
+%\AddToHook{cmd/section/before}{\clearpage}
+\sectionfont{\fontsize{12}{15}\selectfont}
+\subsectionfont{\fontsize{10}{15}\selectfont}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{lemma}{Lemma}
+\DeclareSymbolFont{matha}{OML}{txmi}{m}{it}% txfonts
+\DeclareMathSymbol{\varv}{\mathord}{matha}{118}
+\newcommand{\Setup}{\code{Setup}}
+\newcommand{\Prove}{\code{Prove}}
+\newcommand{\Verify}{\code{Verify}}
+\newcommand{\Sim}{\code{Sim}}
+\setlistdepth{100}
+\newenvironment{myenum}%
+{\pointedenum\begin{enumerate}}%
+{\end{enumerate}}
+\begin{document}
+\maketitle
+
+\section{Problem 1: Speech Classification}
+\section{Problem 2: Language Modeling}
+\section{Problem 3: Improving Previous Models}
+
+\bibliographystyle{plain}
+\bibliography{references}
+\end{document}
