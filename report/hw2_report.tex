@@ -8,11 +8,13 @@
 \usepackage{amssymb}
 \usepackage{float}
 \usepackage{graphics}
+\usepackage{graphicx}
 \usepackage{caption}
 \usepackage[normalem]{ulem}
 \usepackage{enumitem}
 \usepackage{natbib}
 \usepackage{sectsty}
+\usepackage{subcaption}
 \usepackage{csvsimple}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric}
@@ -98,6 +100,37 @@
 \begin{center}
 \csvautotabular{../data/training_metrics/transformer_encoder.csv}
 \end{center}
+
+\noindent We accompany this data with visualized attention maps from the last of each encoder's attention heads. The corresponding plots below depict which tokens were found to have strong contextual relationships:
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../data/plots/part1/attention_map_1.png}
+        \label{subfig:am1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../data/plots/part1/attention_map_2.png}
+        \label{subfig:am2}
+    \end{subfigure}
+    \vfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../data/plots/part1/attention_map_3.png}
+        \label{subfig:am3}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../data/plots/part1/attention_map_4.png}
+        \label{subfig:am4}
+    \end{subfigure}
+\caption{the \code{n\_head}-th attention map from each encoder layer in the transformer encoder. The progressive acquisition of contextual relationships between the tokens in the training data is visible from the increase in cell intensity from layer to layer.}
+\end{figure}
+\noindent Along with the increasing understanding of token-wise relationships, we see that tokens have much stronger affinity towards preceding tokens; this is visible from the intensities being much stronger in the first few columns than in the first few rows. This aligns with our natural understanding of the english language, as the situational meaning of a word is often clear from preceding words in the same sentence.
 
 
 \section{Problem 2: Language Modeling}
