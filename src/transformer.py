@@ -1,48 +1,42 @@
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
 
 '''
-@note
-Computes embeddings for a batch of tokens.
-The embedding of a token is the sum of its 
-token embedding and positional embedding
+layer implementations draw heavily from
+https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+but do not use any pre-made layers
 '''
-class CompositeEmbedding(nn.Module):
-    def __init__(self, vocab_size, n_embed):
+class PositionalEncoding(nn.Module):
+
+    def __init__(self, device, max_len, n_embed, dropout=0.1):
         super().__init__()
-        #token embedding and positional embedding
-        #we need one embedding for every word in the vocab
-        self.token_embeddings = nn.Embedding(vocab_size, n_embed)
-        self.positional_embeddings = nn.Embedding(vocab_size, n_embed)
-        #normalize the sums of the embedding vectors
-        self.normalize = nn.LayerNorm(n_embed, eps=1e-5)
-    
-    def forward(self, indices):
-        # create input position tensor that accounts for different sequence lengths
-        input_positions = torch.arange(indices.size(1), device=indices.device, dtype=torch.long).expand_as(indices)
-        token_em = self.token_embeddings(indices)
-        positional_em = self.positional_embeddings(input_positions)
-        composite_em = token_em + positional_em
-        normalized_em = self.normalize(composite_em)
-        #consider adding dropout here if embedding dimension is large
-        return normalized_em
+        self.device = device
+        self.dropout = nn.Dropout(p=dropout)
+        position = torch.arange(max_len).unsqueeze(1).to(self.device)
+        div_term = torch.exp(torch.arange(0, n_embed, 2) * (-np.log(10000.0) / n_embed)).to(self.device)
+        self.pe = torch.zeros(max_len, n_embed).to(self.device)
+        self.pe[:, 0::2] = torch.sin(position * div_term)
+        self.pe[:, 1::2] = torch.cos(position * div_term)
 
-class NHeadAttention(nn.Module):
-    def __init__(self, n_embed, n_heads):
+    def forward(self, x):
+        x = x + self.pe[:x.size(1), :]
+        return self.dropout(x)
+
+class AttentionHead(nn.Module):
+    def __init__(self, n_embed, head_size):
         super().__init__()
         self.n_embed = n_embed
-        self.num_heads = n_heads
-        self.head_dim = n_embed // n_heads
-        self.query = torch.nn.Linear(n_embed, n_embed)
-        self.key = torch.nn.Linear(n_embed, n_embed)
-        self.value = torch.nn.Linear(n_embed, n_embed)
-        self.normalize = nn.LayerNorm(n_embed, eps=1e-5)
-        self.dropout = nn.Dropout(p=0.5)
+        self.head_size = head_size
+        self.query = torch.nn.Linear(n_embed, head_size)
+        self.key = torch.nn.Linear(n_embed, head_size)
+        self.value = torch.nn.Linear(n_embed, head_size)
 
     def forward(self, x):
         '''
-        compute relevance of input embedding to the query vectors in 
+        compute relevance of input embedding to the query vectors in learned 
         query matrix
 
         this result is multiplied by the key matrix to determine relevance
@@ -51,29 +45,33 @@ class NHeadAttention(nn.Module):
         multiply this result by the value matrix to obtain the relevance
         between input embedding the the value vectors (normalized)
         '''
-        #get batch size from number of embedding matrices in x 
-        #view query tensor grouped by head instead of across all heads
-        batch_size = x.size(0)
-
-        # compute q, k, v PER HEAD but in one tensor
-        query = self.query(x).view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
-        key = self.key(x).view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
-        value = self.value(x).view(batch_size, -1, self.num_heads, self.head_dim).transpose(1, 2)
+        query = self.query(x)
+        key = self.key(x)
+        value = self.value(x)
         
-        #value is of shape [batch_size, seq_length, num_heads, head_dim]
         # matmul does not need contiguous inputs
-        raw_scores = torch.matmul(query, key.transpose(-2, -1)) / torch.sqrt(torch.tensor(self.head_dim, device=x.device))
-        attn = torch.softmax(raw_scores, dim=-1)
-        attn = self.dropout(attn)
+        query_key_affinity_scores = torch.matmul(query, key.transpose(-2, -1)) * x.size(1)**-(1/2)
 
-        #view requires contiguous inputs
-        #multiply by value mtrx to get weighted value vectors for each set of attn values per embd matrix, PER HEAD
-        #reshape to [batch_size, embed_dim] to get the result per embedding (aggregate the heads)
-        ctx = torch.matmul(attn, value).transpose(1, 2).contiguous().view(batch_size, -1, self.n_embed)
+        attn = F.softmax(query_key_affinity_scores, dim=-1)
+        ctx = torch.matmul(attn, value)
 
-        # normalize attn context
-        x = self.normalize(ctx)
-        return x
+        # return attn maps too
+        return ctx, attn
+
+class NHeadAttention(nn.Module):
+    def __init__(self, n_embed, n_heads):
+        super().__init__()
+        self.heads = nn.ModuleList([AttentionHead(n_embed, n_embed // n_heads) for _ in range (n_heads)])
+    
+    def forward(self, x):
+        #concatenate attention head values along last dimension to get back n_embed
+        ctx_tensors = []
+        sample_attn_map = None
+        for head in self.heads:
+            ctx, attn = head(x)
+            ctx_tensors.append(ctx)
+            sample_attn_map = attn
+        return torch.cat(ctx_tensors, dim=-1), sample_attn_map
     
 '''
 n_embd = 64  # Embedding dimension
@@ -88,26 +86,74 @@ n_hidden = 100  # Hidden size for the classifier
 n_output = 3  # Output size for the classifier, we have 3 classes
 epochs_CLS = 15 # epochs for classifier training
 '''
-class CustomTransformerEncoder(nn.Module):
-    def __init__(self, vocab_size, n_embed, n_heads, n_layer, n_input, n_hidden, n_output):
+class Encoder(nn.Module):
+    def __init__(self, device, n_embed, n_heads, n_hidden):
         super().__init__()
         #each token has an embedding of dimension n_embed. 
         #so the embedding for a sequence is a [batch_size, n_embed] matrix
-        self.embedding = CompositeEmbedding(vocab_size, n_embed)
+        self.device = device
+        self.layer_norm = nn.LayerNorm(n_embed)
+        self.nhead_attn = NHeadAttention(n_embed, n_heads) 
+        self.ff1 = nn.Linear(n_embed, n_embed)
+
+    def forward(self, x):
+        x = self.layer_norm(x)
+        ctx, sample_attn_map = self.nhead_attn(x)
+        x = x + ctx
+        x = x + self.ff1(x)
+        return x, sample_attn_map
+
+
+class CustomTransformerEncoder(nn.Module):
+    def __init__(self, device, vocab_size, max_len, n_embed, n_heads, n_layer, n_hidden, n_output):
+        super().__init__()
+        self.device = device 
+        self.n_embed = n_embed
+        #each token has an embedding of dimension n_embed. 
+        #so the embedding for a sequence is a [batch_size, n_embed] matrix
+        self.embedding = nn.Embedding(vocab_size, n_embed)
         #stack multihead attn layers followed by ff network
-        self.transformer_layers = nn.ModuleList([NHeadAttention(n_embed, n_heads) for _ in range(n_layer)])
+        self.positional_encoding = PositionalEncoding(self.device, max_len=max_len, n_embed=n_embed)
+        self.encoder_layers = nn.ModuleList([Encoder(self.device, n_embed, n_heads, n_hidden) for _ in range(n_layer)])
         self.ffnet = nn.Sequential(
-            nn.Linear(n_input, n_hidden),
+            nn.Linear(n_embed, n_hidden),
             nn.ReLU(),
-            nn.Linear(n_hidden, n_output)
+            nn.Linear(n_hidden, n_output),
+
         )
 
     def forward(self, x):
-        x = self.embedding(x)
-        for layer in self.transformer_layers:
-            x = layer(x)
-        # take the mean over all the embeddings for each token
-        # gives a length-indep. repr. for each sequence
-        x = x.mean(dim=1)
+        attention_maps = []
+        # [batch_size, seq_len, n_embed]
+        x = self.embedding(x).squeeze(dim=0)
+        x = self.positional_encoding(x)
+        for layer in self.encoder_layers:
+            x, sample_attn = layer(x)
+            attention_maps.append(sample_attn)
+        x = x.sum(dim=-2)
         x = self.ffnet(x)
-        return x
+        return x, attention_maps
+
+# class CustomTransformerDecoder(nn.Module):
+#     def __init__(self, vocab_size, n_embed, n_heads, n_layer, n_hidden, n_output):
+#         super().__init__()
+#         #each token has an embedding of dimension n_embed. 
+#         #so the embedding for a sequence is a [batch_size, n_embed] matrix
+#         self.embedding = nn.Embedding(vocab_size, n_embed)
+#         #stack multihead attn layers followed by ff network
+#         self.positional_encoding = PositionalEncoding(max_len=max_len, n_embed=n_embed)
+#         self.encoder_layers = nn.ModuleList([Encoder(n_embed, n_heads, n_input, n_hidden, n_output) for _ in range(n_layer)])
+#         self.ffnet = nn.Sequential(
+#             nn.Linear(n_hidden, n_output)
+#         )
+
+#     def forward(self, x):
+#         attention_maps = []
+#         x = self.embedding(x)
+#         x = self.positional_encoding(x)
+#         for layer in self.encoder_layers:
+#             x, attn = layer(x)
+#             attention_maps.append(attn)
+#         x = x.mean(dim=1)
+#         x = self.ffnet(x)
+#         return x, attention_maps

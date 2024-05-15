@@ -13,6 +13,7 @@
 \usepackage{enumitem}
 \usepackage{natbib}
 \usepackage{sectsty}
+\usepackage{csvsimple}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric}
 \usetikzlibrary{trees}
@@ -86,6 +87,19 @@
 \maketitle
 
 \section{Problem 1: Speech Classification}
+\noindent For this classification problem, we used a transformer encoder classifier consisting of:
+\begin{itemize}
+    \item a composite embedding which uses \code{torch.nn.Embedding} and a sinusoidal positional encoding to map each token to a high-dimension latent representation
+    \item multiple sequential encoder blocks, each of which uses multi-head attention to extract contextual relationships between tokens
+    \item a fully connected layer, which produces a one-hot vector corresponding to the predicted class
+\end{itemize}
+
+\noindent The training and evaluation dataset consisted of sentences, each of which was uttered by one of three presidents. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the former dataset using an adam optimizer with a learning rate of $\alpha = 0.001$. The resulting model achieved an accuracy of $83.2\%$ on the evaluation dataset. Below is a table depicting the progression of training loss/accuracy:\\
+\begin{center}
+\csvautotabular{../data/training_metrics/transformer_encoder.csv}
+\end{center}
+
+
 \section{Problem 2: Language Modeling}
 \section{Problem 3: Improving Previous Models}
 
