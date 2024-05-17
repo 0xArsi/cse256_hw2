@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from hyperparams import *
 
 '''
 layer implementations draw heavily from
@@ -26,13 +27,16 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class AttentionHead(nn.Module):
-    def __init__(self, n_embed, head_size):
+    def __init__(self, n_embed, head_size, device, masked=False):
         super().__init__()
         self.n_embed = n_embed
         self.head_size = head_size
+        self.masked = masked
+        self.device = device
         self.query = torch.nn.Linear(n_embed, head_size)
         self.key = torch.nn.Linear(n_embed, head_size)
         self.value = torch.nn.Linear(n_embed, head_size)
+        self.tril = torch.tril(torch.ones(block_size, block_size, dtype=torch.bool)).to(self.device)
 
     def forward(self, x):
         '''
@@ -51,7 +55,8 @@ class AttentionHead(nn.Module):
         
         # matmul does not need contiguous inputs
         query_key_affinity_scores = torch.matmul(query, key.transpose(-2, -1)) * x.size(1)**-(1/2)
-
+        if self.masked:
+            query_key_affinity_scores = query_key_affinity_scores.masked_fill(self.tril[:block_size, :block_size], float("-inf"))
         attn = F.softmax(query_key_affinity_scores, dim=-1)
         ctx = torch.matmul(attn, value)
 
@@ -59,9 +64,9 @@ class AttentionHead(nn.Module):
         return ctx, attn
 
 class NHeadAttention(nn.Module):
-    def __init__(self, n_embed, n_heads):
+    def __init__(self, n_embed, n_heads, device, masked=False):
         super().__init__()
-        self.heads = nn.ModuleList([AttentionHead(n_embed, n_embed // n_heads) for _ in range (n_heads)])
+        self.heads = nn.ModuleList([AttentionHead(n_embed, n_embed // n_heads, device, masked=masked) for _ in range (n_heads)])
     
     def forward(self, x):
         #concatenate attention head values along last dimension to get back n_embed
@@ -93,7 +98,24 @@ class Encoder(nn.Module):
         #so the embedding for a sequence is a [batch_size, n_embed] matrix
         self.device = device
         self.layer_norm = nn.LayerNorm(n_embed)
-        self.nhead_attn = NHeadAttention(n_embed, n_heads) 
+        self.nhead_attn = NHeadAttention(n_embed, n_heads, device) 
+        self.ff1 = nn.Linear(n_embed, n_embed)
+
+    def forward(self, x):
+        x = self.layer_norm(x)
+        ctx, sample_attn_map = self.nhead_attn(x)
+        x = x + ctx
+        x = x + self.ff1(x)
+        return x, sample_attn_map
+
+class Decoder(nn.Module):
+    def __init__(self, device, vocab_size, n_embed, n_heads, n_hidden):
+        super().__init__()
+        #each token has an embedding of dimension n_embed. 
+        #so the embedding for a sequence is a [batch_size, n_embed] matrix
+        self.device = device
+        self.layer_norm = nn.LayerNorm(n_embed)
+        self.nhead_attn = NHeadAttention(n_embed, n_heads, device, masked=True) 
         self.ff1 = nn.Linear(n_embed, n_embed)
 
     def forward(self, x):
@@ -134,26 +156,31 @@ class CustomTransformerEncoder(nn.Module):
         x = self.ffnet(x)
         return x, attention_maps
 
-# class CustomTransformerDecoder(nn.Module):
-#     def __init__(self, vocab_size, n_embed, n_heads, n_layer, n_hidden, n_output):
-#         super().__init__()
-#         #each token has an embedding of dimension n_embed. 
-#         #so the embedding for a sequence is a [batch_size, n_embed] matrix
-#         self.embedding = nn.Embedding(vocab_size, n_embed)
-#         #stack multihead attn layers followed by ff network
-#         self.positional_encoding = PositionalEncoding(max_len=max_len, n_embed=n_embed)
-#         self.encoder_layers = nn.ModuleList([Encoder(n_embed, n_heads, n_input, n_hidden, n_output) for _ in range(n_layer)])
-#         self.ffnet = nn.Sequential(
-#             nn.Linear(n_hidden, n_output)
-#         )
+class CustomTransformerDecoder(nn.Module):
+    def __init__(self, device, vocab_size, n_embed, n_heads, n_layer, n_hidden):
+        super().__init__()
+        #each token has an embedding of dimension n_embed. 
+        #so the embedding for a sequence is a [batch_size, n_embed] matrix
+        self.device = device
+        self.vocab_size = vocab_size
+        self.n_embed = n_embed
+        self.embedding = nn.Embedding(vocab_size, n_embed)
+        #stack multihead attn layers followed by ff network
+        self.positional_encoding = PositionalEncoding(self.device, block_size, n_embed)
+        self.decoder_layers = nn.ModuleList([Decoder(self.device, self.vocab_size, n_embed, n_heads, n_hidden) for _ in range(n_layer)])
+        self.ffnet = nn.Sequential(
+            nn.Linear(n_embed, n_hidden),
+            nn.ReLU(),
+            nn.Linear(n_hidden, vocab_size),
+        )
 
-#     def forward(self, x):
-#         attention_maps = []
-#         x = self.embedding(x)
-#         x = self.positional_encoding(x)
-#         for layer in self.encoder_layers:
-#             x, attn = layer(x)
-#             attention_maps.append(attn)
-#         x = x.mean(dim=1)
-#         x = self.ffnet(x)
-#         return x, attention_maps
+    def forward(self, x):
+        attention_maps = []
+        x = self.embedding(x)
+        x = self.positional_encoding(x)
+        for layer in self.decoder_layers:
+            x, attn = layer(x)
+            attention_maps.append(attn)
+        x = x.sum(dim=1)
+        x = self.ffnet(x)
+        return x, attention_maps

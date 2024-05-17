@@ -1,6 +1,76 @@
 import os
 import matplotlib.pyplot as plt
 import torch
+from torch.nn.utils.rnn import pad_sequence
+
+from hyperparams import *
+
+def load_texts(directory):
+    """
+    This function loads all texts from the specified directory, ignoring any files with "test" in their name. The text is used for "training" the tokenizer. Since our tokenizer is simple, we don't need to do any training, but we still need to ignore the test data. 
+    """
+
+    texts = []
+    files = os.listdir(directory)
+    for filename in files: 
+        if "test" in filename:  ## don't "read test files"
+            continue
+        with open(os.path.join(directory, filename), 'r', encoding='utf-8') as file:
+            texts.append(file.read())
+    return texts
+
+
+
+def collate_batch(batch):
+    """ Collate a batch of data into a single tensor with padding."""
+    data, labels = zip(*batch)  # Separate the data and labels
+    # Pad sequences to the fixed length
+    padded_sequences = pad_sequence(data, batch_first=True, padding_value=0)
+    padded_sequences = padded_sequences[:, :block_size]  # Truncate if longer
+    # Add padding if shorter
+    padded_sequences = torch.nn.functional.pad(padded_sequences, (0, max(0, block_size - padded_sequences.shape[1])), "constant", 0)
+    labels = torch.stack(labels)  
+    return padded_sequences, labels
+
+def compute_classifier_accuracy(classifier, data_loader, device, data_dir, write_data=False):
+    """ Compute the accuracy of the classifier on the data in data_loader."""
+    classifier.eval()
+    total_correct = 0
+    total_samples = 0
+    with torch.no_grad():
+        for X, Y in data_loader:
+            X, Y = X.to(device), Y.to(device)
+            outputs, _ = classifier(X)
+            _, predicted = torch.max(outputs.data, 1)
+            total_correct += (predicted == Y).sum().item()
+            total_samples += Y.size(0)
+    
+    accuracy = (100 * total_correct / total_samples)
+    classifier.train()
+    return accuracy
+
+
+def compute_perplexity(decoderLMmodel, data_loader, device, eval_iters=100):
+    """ Compute the perplexity of the decoderLMmodel on the data in data_loader.
+    Make sure to use the cross entropy loss for the decoderLMmodel.
+    """
+    decoderLMmodel.eval()
+    losses= []
+    for X, Y in data_loader:
+        X, Y = X.to(device), Y.to(device)
+        loss = decoderLMmodel(X, Y) # your model should be computing the cross entropy loss
+        losses.append(loss.item())
+        total_loss += loss.item()
+        if len(losses) >= eval_iters: break
+
+
+    losses = torch.tensor(losses)
+    mean_loss = losses.mean()
+    perplexity = torch.exp(mean_loss).item()  # Calculate perplexity as exp(mean loss)
+
+    decoderLMmodel.train()
+    return perplexity
+
 
 class Utilities:
     def __init__(self, tokenizer, model, plot_dir, device):

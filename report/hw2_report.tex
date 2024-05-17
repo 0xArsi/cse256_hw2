@@ -89,14 +89,14 @@
 \maketitle
 
 \section{Problem 1: Speech Classification}
-\noindent For this classification problem, we used a transformer encoder classifier consisting of:
+\noindent For this classification problem - namely, predict which president said a given sentence - we used a transformer encoder classifier consisting of:
 \begin{itemize}
     \item a composite embedding which uses \code{torch.nn.Embedding} and a sinusoidal positional encoding to map each token to a high-dimension latent representation
-    \item multiple sequential encoder blocks, each of which uses multi-head attention to extract contextual relationships between tokens
+    \item multiple sequential \textbf{encoder} blocks, each of which uses multi-head attention to extract contextual relationships between tokens
     \item a fully connected layer, which produces a one-hot vector corresponding to the predicted class
 \end{itemize}
 
-\noindent The training and evaluation dataset consisted of sentences, each of which was uttered by one of three presidents. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the former dataset using an adam optimizer with a learning rate of $\alpha = 0.001$. The resulting model achieved an accuracy of $83.2\%$ on the evaluation dataset. Below is a table depicting the progression of training loss/accuracy:\\
+\noindent The training and evaluation dataset consisted of sentences, each of which was uttered by one of three presidents. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the former dataset using an adam optimizer with a learning rate of $\alpha = 0.001$. The resulting model achieved an accuracy of $81.867\%$ on the evaluation dataset. Below is a table depicting the progression of training loss/accuracy:\\
 \begin{center}
 \csvautotabular{../data/training_metrics/transformer_encoder.csv}
 \end{center}
@@ -130,10 +130,17 @@
     \end{subfigure}
 \caption{the \code{n\_head}-th attention map from each encoder layer in the transformer encoder. The progressive acquisition of contextual relationships between the tokens in the training data is visible from the increase in cell intensity from layer to layer.}
 \end{figure}
-\noindent Along with the increasing understanding of token-wise relationships, we see that tokens have much stronger affinity towards preceding tokens; this is visible from the intensities being much stronger in the first few columns than in the first few rows. This aligns with our natural understanding of the english language, as the situational meaning of a word is often clear from preceding words in the same sentence.
+\noindent Along with the generally increasing understanding of token-wise relationships, we see that tokens have much stronger affinity towards preceding tokens; this is visible from the intensities being much stronger in the first few columns than in the first few rows. This aligns with our natural understanding of the english language, as the contextual meaning of a word is derived from preceding words in the same sentence. That being said, some acquisition of context from future tokens is also visible. We should expect to see such a thing in the decoder model we implement due to the masking.
 
 
 \section{Problem 2: Language Modeling}
+This language modeling problem involves predicting the most likely following token based on information from previous tokens. For this task we used a transformer decoder consisting of:
+\begin{itemize}
+    \item a composite embedding which uses \code{torch.nn.Embedding} and a sinusoidal positional encoding to map each token to a high-dimension latent representation
+    \item multiple sequential \textbf{decoder} blocks, each of which uses masked multi-head self- attention to extract contextual relationships between a given token and those preceding it
+    \item a fully connected layer, which produces a one-hot vector indicating the most likely token in our vocabulary to come next
+\end{itemize}
+
 \section{Problem 3: Improving Previous Models}
 
 \bibliographystyle{plain}

@@ -17,7 +17,7 @@ class SimpleTokenizer:
     def build_vocab(self, text):
         """Build vocabulary from the given text."""
         tokens = word_tokenize(text)
-        self.vocab = set(tokens)
+        self.vocab = self.vocab = sorted(list(set(tokens)))
         self.vocab_size = len(self.vocab) + 2
         self.stoi = {word: i for i, word in enumerate(self.vocab, start=2)}
         self.stoi['<pad>'] = 0
