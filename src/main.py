@@ -43,5 +43,5 @@ if __name__ == "__main__":
         part2(device)
     
     elif parsed_args.part == "part3":
-        part3(device, p_dropout=0.4)
+        part3(device, p_dropout=0.5)
     

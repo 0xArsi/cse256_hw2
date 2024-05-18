@@ -135,6 +135,7 @@ def train_part2(device, vocab_size, td, train_LM_loader, test_hbush_loader, test
     loss_over_eval_period = 0
     samples_over_eval_period = 0
 
+    training_metrics["period"] = np.arange(1, len(losses) + 1, dtype=int)
     training_metrics["loss"] = losses
     training_metrics["perplexity"] = perps
     

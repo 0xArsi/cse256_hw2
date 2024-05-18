@@ -98,6 +98,9 @@ def check_sanity_part3(te, tokenizer, device, plot_dir):
     u.sanity_check("The quick brown fox jumped over the lazy dog.", block_size=block_size)
     u.sanity_check("Doing the same thing and expecting different results is insanity.", block_size=block_size)
 
+def tune_model():
+    print ("tuning model...")
+    
 def part3(device, p_dropout=0):
     data_dir = os.path.join(".", "data");
     training_data_dir = os.path.join("data", "speechesdataset")
@@ -114,3 +117,5 @@ def part3(device, p_dropout=0):
     _, test_CLS_loader, _ = load_eval_data_part3(eval_data_dir)
     eval_accuracy = compute_classifier_accuracy(te, test_CLS_loader, device, data_dir, write_data=True)
     print (f"eval accuracy: {eval_accuracy}")
+    print ("done")
+

@@ -40,6 +40,7 @@ class AttentionHead(nn.Module):
         self.value = torch.nn.Linear(n_embed, head_size)
         mask_mat = torch.triu(torch.ones(block_size, block_size, dtype=torch.bool)).to(self.device)
         self.register_buffer('mask_mat', mask_mat)
+        self.p_dropout = p_dropout
         self.dropout = nn.Dropout(p=p_dropout)
     def forward(self, x):
         '''
@@ -61,6 +62,7 @@ class AttentionHead(nn.Module):
         if self.masked:
             query_key_affinity_scores = query_key_affinity_scores.masked_fill(self.mask_mat[:block_size, :block_size], self.very_negative_number)
         attn = F.softmax(query_key_affinity_scores, dim=-1)
+        # print (f"attn is {attn}")
         attn_dropout = self.dropout(attn)
         #keep dim so each row in each matrix is divided by each unit-row in each matrix of sum
         attn_dropout = attn_dropout / (torch.sum(attn_dropout, dim=-1, keepdim=True))**int(self.p_dropout > 0)
@@ -68,89 +70,6 @@ class AttentionHead(nn.Module):
 
         # return attn maps too
         # print (f"attention layer output shape: {ctx.shape}")
-        return ctx, attn
-
-class NHeadAttention(nn.Module):
-    def __init__(self, n_embed, n_heads, device, masked=False, p_dropout=0):
-        super().__init__()
-        self.heads = nn.ModuleList([AttentionHead(n_embed, n_embed // n_heads, device, masked=masked, p_dropout=p_dropout) for _ in range (n_heads)])
-    import os
-import torch
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from torch.nn.utils.rnn import pad_sequence
-
-from tokenizer import SimpleTokenizer
-from dataset import SpeechesClassificationDataset, LanguageModelingDataset
-
-from transformer import *
-from utilities import *
-
-import numpy as np
-import pandas as pd
-
-from hyperparams import *
-
-'''
-layer implementations draw heavily from
-https://pytorch.org/tutorials/beginner/transformer_tutorial.html
-but do not use any pre-made layers
-'''
-class PositionalEncoding(nn.Module):
-
-    def __init__(self, device, max_len, n_embed, dropout=0.1):
-        super().__init__()
-        self.device = device
-        self.dropout = nn.Dropout(p=dropout)
-        position = torch.arange(max_len).unsqueeze(1).to(self.device)
-        div_term = torch.exp(torch.arange(0, n_embed, 2) * (-np.log(10000.0) / n_embed)).to(self.device)
-        self.pe = torch.zeros(max_len, n_embed).to(self.device)
-        self.pe[:, 0::2] = torch.sin(position * div_term)
-        self.pe[:, 1::2] = torch.cos(position * div_term)
-
-    def forward(self, x):
-        x = x + self.pe[:x.size(1), :]
-        return self.dropout(x)
-
-class AttentionHead(nn.Module):
-    def __init__(self, n_embed, head_size, device, masked=False, p_dropout=0):
-        super().__init__()
-        self.n_embed = n_embed
-        self.head_size = head_size
-        self.masked = masked
-        self.device = device
-        self.query = torch.nn.Linear(n_embed, head_size)
-        self.key = torch.nn.Linear(n_embed, head_size)
-        self.value = torch.nn.Linear(n_embed, head_size)
-        self.tril = torch.tril(torch.ones(block_size, block_size, dtype=torch.bool)).to(self.device)
-        self.p_dropout = p_dropout
-        self.dropout = nn.Dropout(p=self.p_dropout)
-
-    def forward(self, x):
-        '''
-        compute relevance of input embedding to the query vectors in learned 
-        query matrix
-
-        this result is multiplied by the key matrix to determine relevance
-        of each query to each key
-
-        multiply this result by the value matrix to obtain the relevance
-        between input embedding the the value vectors (normalized)
-        '''
-        query = self.query(x)
-        key = self.key(x)
-        value = self.value(x)
-        
-        # matmul does not need contiguous inputs
-        query_key_affinity_scores = torch.matmul(query, key.transpose(-2, -1)) * x.size(1)**-(1/2)
-        if self.masked:
-            query_key_affinity_scores = query_key_affinity_scores.masked_fill(self.tril[:block_size, :block_size], float("-inf"))
-        attn = F.softmax(query_key_affinity_scores, dim=-1)
-        attn_dropout = self.dropout(attn)
-        attn_dropout = attn_dropout / torch.sum(attn_dropout, dim=-1, keepdim=True) ** (self.p_dropout > 0)
-        ctx = torch.matmul(attn, value)
-
-        # return attn maps too
         return ctx, attn
 
 class NHeadAttention(nn.Module):

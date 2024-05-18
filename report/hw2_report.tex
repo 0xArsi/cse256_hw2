@@ -89,6 +89,7 @@
 \begin{document}
 \maketitle
 
+%PROBLEM 2
 \section{Problem 1: Speech Classification}
 \noindent For this classification problem - namely, predict which president said a given sentence - we used a transformer encoder classifier consisting of:
 \begin{itemize}
@@ -130,7 +131,7 @@
 \end{figure}
 \noindent Along with the generally increasing understanding of token-wise relationships, we see that tokens have affinity towards preceding tokens; this is visible from the intensities being much stronger in the first few columns than in the first few rows. This aligns with our natural understanding of the english language, as the contextual meaning of a word is derived from preceding words in the same sentence. That being said, some acquisition of context from future tokens is also visible. We should expect not to see such a thing in the decoder model we implement due to the masking in the self-attention heads. Additionally, it seems there is abundant affinity between too many pairs of tokens. Applying dropout while maintaining the total "attention mass" one token can "pay" to other tokens could force the network to focus more on the token relationships that matter at the expense of the rest. We will discuss this more in part 3.
 
-
+%PROBLEM 2
 \section{Problem 2: Language Modeling}
 This language modeling problem involves predicting the most likely following token based on information from previous tokens. For this task we used a transformer decoder consisting of:
 \begin{itemize}
@@ -140,10 +141,9 @@ This language modeling problem involves predicting the most likely following tok
 \end{itemize}
 
 \noindent The training dataset consisted of numerous sentences, each of which was tokenized and collated into batches before training like in the first problem. The test datasets were speech corpi from George H. Bush, Barack Obama, and George W. Bush respectively. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the first of these four datasets using an adam optimizer with a learning rate of $\alpha = 0.001$. We depict the training loss/perplexity every 100 iterations below, as well as the final test perplexities on the three test datasets.
-% \begin{figure}[H]
-% \begin{center}
-% \csvautotabular{../data/training_metrics/transformer_decoder.csv}
-% \end{center}
+\begin{center}
+\csvautotabular{../data/training_metrics/transformer_decoder.csv}
+\end{center}
 
 \noindent We accompany this data with visualized attention maps from the last of each encoder's attention heads. The corresponding plots below depict which tokens were found to have strong contextual relationships:
 
@@ -174,6 +174,38 @@ This language modeling problem involves predicting the most likely following tok
 \section{Problem 3: Exploration}
 
 \noindent We mentioned in part 1 that we could potentially improve the performance of the classifier by sharpening the focus of each decoder layer's attention heads. Exploring this option further, we applied dropout to the attention weights after applying the softmax function, then re-normalized the weights so they still summed up to 1 across each row (see \code{transformer.AttentionHead}). We then trained the resulting model on the same training dataset as in part 1 and computed the same training/evaluation metrics.
+
+\noindent As in part 1, the training and evaluation dataset consisted of numerous sentences, each of which was uttered by one of three presidents. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the former dataset using an adam optimizer with a learning rate of $\alpha = 0.001$. The resulting model achieved an accuracy of $82.8\%$ on the evaluation dataset, which was surprisingly worse than part 1. Below is a table depicting the progression of training loss/accuracy:\\
+\begin{center}
+\csvautotabular{../data/training_metrics/transformer_encoder_enhanced.csv}
+\end{center}
+
+\noindent We accompany this data with visualized attention maps from the last of each encoder's attention heads. The corresponding plots below depict which tokens were found to have strong contextual relationships:
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.35\textwidth}
+        \centering
+        \includegraphics[scale=0.4]{../data/plots/part3/attention_map_1.png}
+        \label{subfig:am1}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.35\textwidth}
+        \centering
+        \includegraphics[scale=0.4]{../data/plots/part3/attention_map_2.png}
+        \label{subfig:am2}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.35\textwidth}
+        \centering
+        \includegraphics[scale=0.4]{../data/plots/part3/attention_map_3.png}
+        \label{subfig:am3}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.35\textwidth}
+        \centering
+        \includegraphics[scale=0.4]{../data/plots/part3/attention_map_4.png}
+        \label{subfig:am4}
+    \end{subfigure}
+\caption{the \code{n\_head}-th attention map from each encoder layer in the transformer encoder. The affinities are visibly concentrated instead of being more spread out across the attention map like in part 1.}
+\end{figure}
+\noindent We can see here that the attention maps have more concentrated intensities in fewer areas of the map compared to part 1. This suggests that the model learned to focus more on the most influential token relationships since such mass would be dropped out randomly. Despite the lower test accuracy, it's possible that this approach could generalize better to other datasets than the model trained in part 1.
 
 \bibliographystyle{plain}
 \bibliography{references}
