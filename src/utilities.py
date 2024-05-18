@@ -1,6 +1,7 @@
 import os
 import matplotlib.pyplot as plt
 import torch
+import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 
 from hyperparams import *
@@ -54,13 +55,15 @@ def compute_perplexity(decoderLMmodel, data_loader, device, eval_iters=100):
     """ Compute the perplexity of the decoderLMmodel on the data in data_loader.
     Make sure to use the cross entropy loss for the decoderLMmodel.
     """
+    criterion = nn.CrossEntropyLoss() 
     decoderLMmodel.eval()
     losses= []
     for X, Y in data_loader:
         X, Y = X.to(device), Y.to(device)
-        loss = decoderLMmodel(X, Y) # your model should be computing the cross entropy loss
+        prediction, _ = decoderLMmodel(X)
+        prediction_T = prediction.transpose(-2, -1)
+        loss = criterion(prediction_T, Y)
         losses.append(loss.item())
-        total_loss += loss.item()
         if len(losses) >= eval_iters: break
 
 
@@ -102,7 +105,7 @@ class Utilities:
             print (att_map)
 
             # Check if the attention probabilities sum to 1 over rows
-            total_prob_over_rows = torch.sum(attn_map, dim=1)
+            total_prob_over_rows = torch.sum(attn_map, dim=-1)
             if torch.any(total_prob_over_rows < 0.99) or torch.any(total_prob_over_rows > 1.01):
                 print("Failed normalization test: probabilities do not sum to 1.0 over rows")
                 #print("Total probability over rows:", total_prob_over_rows.detach().cpu().numpy())

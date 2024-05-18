@@ -17,6 +17,7 @@ import pandas as pd
 
 from part1 import part1
 from part2 import part2
+from part3 import part3
 # from part3 import part3
 
 from utilities import Utilities
@@ -41,6 +42,6 @@ if __name__ == "__main__":
     elif parsed_args.part == "part2":
         part2(device)
     
-    # elif parsed_args.part == "part3":
-    #     part3()
+    elif parsed_args.part == "part3":
+        part3(device, p_dropout=0.4)
     
