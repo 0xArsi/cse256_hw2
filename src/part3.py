@@ -51,9 +51,9 @@ def load_model_part3(vocab_size, device, model_path=None, p_dropout=0):
         te.load_state_dict(torch.load(model_path))
     return te
 
-def train_part3(te, train_CLS_loader, device, data_dir):
+def train_part3(te, train_CLS_loader, device, data_dir, alpha=1e-3):
     criterion = nn.CrossEntropyLoss()  # Suitable for classification tasks
-    optimizer = optim.Adam(te.parameters(), lr=0.001)  # Learning rate might need tuning
+    optimizer = optim.Adam(te.parameters(), lr=alpha)  # Learning rate might need tuning
     training_metrics = pd.DataFrame({"epoch":np.arange(1, epochs_CLS+1, dtype=int),"loss":np.zeros(epochs_CLS, dtype=float), "accuracy": np.zeros(shape=epochs_CLS, dtype=float)})
 
     # for the classification  task, you will train for a fixed number of epochs like this:
@@ -136,6 +136,18 @@ def tune_part3():
     )
     best_te = tuning_result.get_best_trial("loss", "min", "last")
     print(f"Best te params: {best_te.config}")
+    n_embed_best = best_te.config["n_embed"]
+    n_head_best = best_te.config["n_heads"]
+    n_layer_best = best_te.config["n_layer"]
+    n_hidden_best = best_te.config["n_embed"]
+    alpha_best = best_te.config["alpha"]
+    cte_best = CustomTransformerEncoder(device,  vocab_size, block_size, n_embed_best, n_head_best, n_layer_best, n_hidden_best, n_output, p_dropout=0).to(device)
+    train_part3(cte_best, train_CLS_loader, device, data_dir, alpha=alpha_best)
+    eval_accuracy = compute_classifier_accuracy(cte_best, test_CLS_loader, device, data_dir, write_data=True)
+    print(f"Best te params: {best_te.config}")
+    print (f"eval_accuracy: {eval_accuracy}")
+    print ("done")
+    
 
 def train_for_tuning(config, device=None, train_CLS_loader=None, vocab_size=5575, data_dir=None):
     te = CustomTransformerEncoder(device=device, vocab_size=vocab_size, max_len=block_size, n_embed=config["n_embed"], n_heads=config["n_heads"], n_layer=config["n_layer"], n_hidden=config["n_hidden"], n_output=n_output, p_dropout=config["p_dropout"]).to(device)

@@ -216,7 +216,7 @@ The model did not attain as low a perplexity for the H. Bush and W. Bush dataset
 
 %Best te params: {'n_embed': 32, 'n_heads': 4, 'n_layer': 2, 'n_hidden': 100, 'p_dropout': 0, 'batch_size': 16, 'alpha': 0.0038935580035601813}
 \subsection{Performance Improvement}
-\noindent For performance improvment, we first attempted to tune 20 configurations of our dropout-enhanced transformer encoder over a reasonable search space using RayTune and an ASHA scheduler, which asynchronously tunes multiple model configurations and stops underperforming models early. This process was not very successful, as most of the losses became \code{nan} in later iterations of training, causing the corresponding model configurations to be terminated. This was likely due to the dropout nondeterministically zeroing out the denominator of the post-softmax renormalization, causing \code{nan} losses/gradients. The records for this run are under \code{data/tuning\_results\_transformer\_encoder\_dropout.csv}. We then performed the same tuning procedure with \code{p\_dropout=0}, which stabilized the losses and gradients. The results from this run can be found at \code{data/tuning\_results\_transformer\_encoder.csv}. The best configuration from this run was the following:
+\noindent For performance improvment, we first attempted to tune 20 configurations of our dropout-enhanced transformer encoder over a reasonable search space using RayTune and an ASHA scheduler, which asynchronously tunes multiple model configurations and stops underperforming models early. This process was not very successful, as most of the losses became \code{nan} in later iterations of training, causing the corresponding model configurations to be terminated. This was likely due to the dropout randomly zeroing out the denominator of the post-dropout renormalization, causing \code{nan} losses/gradients. The records for this run are under \code{data/tuning\_results\_transformer\_encoder\_dropout.csv}. We then performed the same tuning procedure with \code{p\_dropout=0}, which stabilized the losses and gradients. The results from this run can be found at \code{data/tuning\_results\_transformer\_encoder.csv}. The best configuration from this run was the following:
 \newpage
 \begin{lstlisting}[language=Python, basicstyle=\ttfamily\small, frame=single] 
     {
@@ -229,8 +229,8 @@ The model did not attain as low a perplexity for the H. Bush and W. Bush dataset
      'alpha': 0.0038935580035601813, 
     } 
 \end{lstlisting}
-when we evaluated the model on the test data
 
+\noindent Interestingly enough, the best trial had a different number of attention heads and a different embedding size. This trial yielded an evaluation accuracy of $86.53\%$, which is slightly lower than the $86.8\%$ accuracy of the original model trained in part 1. Clearly further research is required on this front.
 \bibliographystyle{plain}
 \bibliography{references}
 \end{document}
