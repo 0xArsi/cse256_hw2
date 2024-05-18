@@ -13,6 +13,10 @@ from utilities import *
 import numpy as np
 import pandas as pd
 
+from ray import train, tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
+
 from hyperparams import *
 
 def load_training_data_part3(training_data_dir):
@@ -98,10 +102,77 @@ def check_sanity_part3(te, tokenizer, device, plot_dir):
     u.sanity_check("The quick brown fox jumped over the lazy dog.", block_size=block_size)
     u.sanity_check("Doing the same thing and expecting different results is insanity.", block_size=block_size)
 
-def tune_model():
+
+
+def tune_part3():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    data_dir = os.path.join(".", "data");
+    training_data_dir = os.path.join("data", "speechesdataset")
+    eval_data_dir = os.path.join("data", "speechesdataset")
+    model_dir = os.path.join(data_dir, "models")
+    plot_dir = os.path.join(data_dir, "plots", "part3")
+    tokenizer, train_CLS_loader, vocab_size = load_training_data_part3(training_data_dir)
+    _, test_CLS_loader, _ = load_eval_data_part3(eval_data_dir)
     print ("tuning model...")
+    param_space = {
+    "n_embed": tune.choice([32, 64, 128, 256, 512]),
+    "n_heads": tune.choice([2, 4, 8]),
+    "n_layer": tune.choice([2, 4, 6]),
+    "n_hidden": tune.choice([100, 128, 256]),
+    "p_dropout": 0, 
+    "batch_size": 16,
+    "alpha": tune.loguniform(1e-4, 1e-2),
+    }
+    scheduler = ASHAScheduler(metric="loss", mode="min", max_t=9, grace_period=1, reduction_factor=2)
+    prog_reporter = CLIReporter(metric_columns=["epoch_avg_loss", "epoch"])
+
+    tuning_result = tune.run(
+        tune.with_parameters(train_for_tuning, device=device, train_CLS_loader=train_CLS_loader, vocab_size=vocab_size), 
+        resources_per_trial={"cpu": 4, "gpu": 1}, 
+        config=param_space, 
+        num_samples=20, 
+        scheduler=scheduler, 
+        progress_reporter=prog_reporter
+    )
+    best_te = tuning_result.get_best_trial("loss", "min", "last")
+    print(f"Best te params: {best_te.config}")
+
+def train_for_tuning(config, device=None, train_CLS_loader=None, vocab_size=5575, data_dir=None):
+    te = CustomTransformerEncoder(device=device, vocab_size=vocab_size, max_len=block_size, n_embed=config["n_embed"], n_heads=config["n_heads"], n_layer=config["n_layer"], n_hidden=config["n_hidden"], n_output=n_output, p_dropout=config["p_dropout"]).to(device)
+    criterion = nn.CrossEntropyLoss()  # Suitable for classification tasks
+    optimizer = optim.Adam(te.parameters(), lr=config["alpha"])  # Learning rate might need tuning
+
+    # for the classification  task, you will train for a fixed number of epochs like this:
+    '''
+    TRAIN MODEL
+    '''
+    losses = []
+    accs = []
+    print ("starting training")
+    for epoch in range(epochs_CLS):
+        te.train()  # Set the model to training mode
+        total_loss = 0
+        for xb, yb in train_CLS_loader:
+            xb, yb = xb.to(device), yb.to(device)  # Move data to the appropriate device
+            #zero out grads
+            optimizer.zero_grad()
+            #model prediction  
+            outputs, _ = te(xb)  
+            #compute loss
+            loss = criterion(outputs, yb)
+            #backprop 
+            loss.backward()
+            optimizer.step()  
+
+            #update loss for this epoch
+            total_loss += loss.item()  
+            # break
+
+        #print avg loss over epoch
+        epoch_avg_loss = total_loss / len(train_CLS_loader)
+        train.report({"loss": epoch_avg_loss})
     
-def part3(device, p_dropout=0):
+def part3(device, p_dropout=0, tune_also=False):
     data_dir = os.path.join(".", "data");
     training_data_dir = os.path.join("data", "speechesdataset")
     eval_data_dir = os.path.join("data", "speechesdataset")

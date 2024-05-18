@@ -139,9 +139,9 @@ def train_part2(device, vocab_size, td, train_LM_loader, test_hbush_loader, test
     training_metrics["loss"] = losses
     training_metrics["perplexity"] = perps
     
-    testing_metrics["perplexity_hbush"] = perps_hbush
-    testing_metrics["perplexity_obama"] = perps_obama
-    testing_metrics["perplexity_wbush"] = perps_wbush
+    testing_metrics["perplexity-hbush"] = perps_hbush
+    testing_metrics["perplexity-obama"] = perps_obama
+    testing_metrics["perplexity-wbush"] = perps_wbush
 
     training_metrics.to_csv(os.path.join(data_dir, "training_metrics", "transformer_decoder.csv"), sep=",", index=False)
     

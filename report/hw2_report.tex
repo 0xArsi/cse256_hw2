@@ -14,6 +14,8 @@
 \usepackage[normalem]{ulem}
 \usepackage{enumitem}
 \usepackage{natbib}
+\usepackage{listings}
+\usepackage{xcolor}
 \usepackage{sectsty}
 \usepackage{subcaption}
 \usepackage{csvsimple}
@@ -78,10 +80,6 @@
 \newtheorem{lemma}{Lemma}
 \DeclareSymbolFont{matha}{OML}{txmi}{m}{it}% txfonts
 \DeclareMathSymbol{\varv}{\mathord}{matha}{118}
-\newcommand{\Setup}{\code{Setup}}
-\newcommand{\Prove}{\code{Prove}}
-\newcommand{\Verify}{\code{Verify}}
-\newcommand{\Sim}{\code{Sim}}
 \setlistdepth{100}
 \newenvironment{myenum}%
 {\pointedenum\begin{enumerate}}%
@@ -140,12 +138,19 @@ This language modeling problem involves predicting the most likely following tok
     \item a fully connected layer, which produces a one-hot vector indicating the most likely token in our vocabulary to come next \textbf{for each token in the given sequence}
 \end{itemize}
 
-\noindent The training dataset consisted of numerous sentences, each of which was tokenized and collated into batches before training like in the first problem. The test datasets were speech corpi from George H. Bush, Barack Obama, and George W. Bush respectively. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the first of these four datasets using an adam optimizer with a learning rate of $\alpha = 0.001$. We depict the training loss/perplexity every 100 iterations below, as well as the final test perplexities on the three test datasets.
+\noindent The training dataset consisted of numerous sentences, each of which was tokenized and collated into batches before training like in the first problem. The test datasets were speech corpi from George H. Bush, Barack Obama, and George W. Bush respectively. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the first of these four datasets using an adam optimizer with a learning rate of $\alpha = 0.001$. We depict the training loss/perplexity every 100 iterations below.
+
 \begin{center}
 \csvautotabular{../data/training_metrics/transformer_decoder.csv}
 \end{center}
 
-\noindent We accompany this data with visualized attention maps from the last of each encoder's attention heads. The corresponding plots below depict which tokens were found to have strong contextual relationships:
+\noindent We then tested the model on datasets from speeches given by George H. Bush, Barack Obama, and George W. Bush. The resulting perplexities are depicted below: 
+\begin{center}
+\csvautotabular{../data/testing_metrics/transformer_decoder.csv}
+\end{center}
+The model did not attain as low a perplexity for the H. Bush and W. Bush datasets compared to our expectations; it did, however, attain comparable perplexity on the Obama dataset. The results suggest that there is a difference in contextual ambiguity between Obama's speeches compared to the Bush speeches. It's possible that Obama uses more concise and sophisticated language with fewer or significantly clearer contextual relationships within components of each sentence spoken, resulting in lower-entropy predictions from the model.\\
+
+\noindent The attention maps depicted below indicate the strengths of these relationships. It's clear that our masking approach forced attention to only be paid to preceding tokens since the upper triangular half of each map has zero intensity. That said, it seems that the attention heads could be more ``focused'' and distribute their attention mass less uniformly, as some contextual relationships should matter way more than others.
 
 \begin{figure}[H]
     \centering
@@ -172,8 +177,9 @@ This language modeling problem involves predicting the most likely following tok
 \caption{the \code{n\_head}-th attention map from each encoder layer in the trained transformer decoder. As mentioned before, we only see nonzero affinities between the $i$-th token and the $j$-th token in a given block if $i > j$ (token $j$ precedes token $i$).}
 \end{figure}
 \section{Problem 3: Exploration}
+\subsection{Architectural Exploration}
 
-\noindent We mentioned in part 1 that we could potentially improve the performance of the classifier by sharpening the focus of each decoder layer's attention heads. Exploring this option further, we applied dropout to the attention weights after applying the softmax function, then re-normalized the weights so they still summed up to 1 across each row (see \code{transformer.AttentionHead}). We then trained the resulting model on the same training dataset as in part 1 and computed the same training/evaluation metrics.
+\noindent We mentioned in part 1 that we could potentially improve the performance of the classifier by sharpening the focus of each decoder layer's attention heads. Exploring this option further, we applied dropout ($p =0.5$) to the attention weights after applying the softmax function, then re-normalized the weights so they still summed up to 1 across each row (see \code{transformer.AttentionHead}). We then trained the resulting model on the same training dataset as in part 1 and computed the same training/evaluation metrics.
 
 \noindent As in part 1, the training and evaluation dataset consisted of numerous sentences, each of which was uttered by one of three presidents. We trained this model (\code{epochs=15}, \code{batch\_size}=16) on the former dataset using an adam optimizer with a learning rate of $\alpha = 0.001$. The resulting model achieved an accuracy of $82.8\%$ on the evaluation dataset, which was surprisingly worse than part 1. Below is a table depicting the progression of training loss/accuracy:\\
 \begin{center}
@@ -205,7 +211,25 @@ This language modeling problem involves predicting the most likely following tok
     \end{subfigure}
 \caption{the \code{n\_head}-th attention map from each encoder layer in the transformer encoder. The affinities are visibly concentrated instead of being more spread out across the attention map like in part 1.}
 \end{figure}
-\noindent We can see here that the attention maps have more concentrated intensities in fewer areas of the map compared to part 1. This suggests that the model learned to focus more on the most influential token relationships since such mass would be dropped out randomly. Despite the lower test accuracy, it's possible that this approach could generalize better to other datasets than the model trained in part 1.
+\noindent We can see here that the attention maps have more concentrated intensities in fewer areas of the map compared to part 1. This suggests that the model learned to focus more on the most influential token relationships since such mass would be dropped out randomly. Despite the lower test accuracy, it's possible that this approach could generalize better to other datasets than the model trained in part 1.\\
+
+
+%Best te params: {'n_embed': 32, 'n_heads': 4, 'n_layer': 2, 'n_hidden': 100, 'p_dropout': 0, 'batch_size': 16, 'alpha': 0.0038935580035601813}
+\subsection{Performance Improvement}
+\noindent For performance improvment, we first attempted to tune 20 configurations of our dropout-enhanced transformer encoder over a reasonable search space using RayTune and an ASHA scheduler, which asynchronously tunes multiple model configurations and stops underperforming models early. This process was not very successful, as most of the losses became \code{nan} in later iterations of training, causing the corresponding model configurations to be terminated. This was likely due to the dropout nondeterministically zeroing out the denominator of the post-softmax renormalization, causing \code{nan} losses/gradients. The records for this run are under \code{data/tuning\_results\_transformer\_encoder\_dropout.csv}. We then performed the same tuning procedure with \code{p\_dropout=0}, which stabilized the losses and gradients. The results from this run can be found at \code{data/tuning\_results\_transformer\_encoder.csv}. The best configuration from this run was the following:
+\newpage
+\begin{lstlisting}[language=Python, basicstyle=\ttfamily\small, frame=single] 
+    {
+     'n_embed': 32,
+     'n_heads': 4,
+     'n_layer': 2,
+     'n_hidden': 100,
+     'p_dropout': 0,
+     'batch_size': 16,
+     'alpha': 0.0038935580035601813, 
+    } 
+\end{lstlisting}
+when we evaluated the model on the test data
 
 \bibliographystyle{plain}
 \bibliography{references}

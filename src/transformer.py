@@ -201,3 +201,11 @@ class CustomTransformerDecoder(nn.Module):
             attention_maps.append(attn)
         x = self.ffnet(x)
         return x, attention_maps
+
+# class TunableCustomTransformerDecoder(nn.Module):
+#     def __init__(self, device, vocab_size, max_len, n_embed, n_heads, n_layer, n_hidden, n_output, p_dropout=0):
+#         self.custom_te = CustomTransformerEncoder(device, vocab_size, max_len, n_embed, n_heads, n_layer, n_hidden, n_output, p_dropout=p_dropout)
+
+#         def forward(self, x):
+#             out, _ = custom_te(x)
+#             return out
