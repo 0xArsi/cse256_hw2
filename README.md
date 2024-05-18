@@ -16,4 +16,12 @@ Run the different parts of this assignment (make sure you are in the project roo
 
 `python src/main.py tune_part3` (hyperparam tuning on speech classifier)
 
+## Code
+
+* `src/transformer.py` contains the various model layers
+* `src/part1.py` contains the code run to generate the results of part 1
+* `src/part2.py` contains the code run to generate the results of part 2
+* `src/part3.py` contains the code run to generate the results of part 3
+* `src/main.py` runs the preceding modules
+
 
